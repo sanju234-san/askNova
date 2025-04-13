@@ -1,0 +1,42 @@
+import streamlit as st
+from ibm_watson import TextToSpeechV1
+from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+import os
+
+# === IBM Watson TTS Credentials ===
+tts_api_key = 'jgrAfEhKei2MLssxHGyPwW4uroLBf1LV9ckX6leiU9b1'  # ✅ Replace with your API key
+tts_url = 'https://api.us-south.text-to-speech.watson.cloud.ibm.com/instances/3d2f4748-4b26-4d25-9a17-690ebd52a8ce'  # ✅ Replace with your service URL
+
+# === IBM Watson TTS Authenticator ===
+authenticator = IAMAuthenticator(tts_api_key)
+tts = TextToSpeechV1(authenticator=authenticator)
+tts.set_service_url(tts_url)
+
+# === Streamlit UI ===
+st.set_page_config(page_title="AskNova TTS", page_icon="🗣️")
+st.title("🔊 AskNova - Text to Speech Assistant")
+st.write("Type your message and AskNova will speak it aloud!")
+
+# === User Input ===
+user_input = st.text_area("Enter your message:")
+
+if st.button("Convert to Speech"):
+    if not user_input.strip():
+        st.warning("Please enter some text.")
+    else:
+        # Save audio to file
+        output_file = 'output_audio.wav'
+        with open(output_file, 'wb') as audio_file:
+            audio_file.write(
+                tts.synthesize(
+                    user_input,
+                    voice='en-US_AllisonV3Voice',  # Optional: Change voice
+                    accept='audio/wav'
+                ).get_result().content
+            )
+
+        # Play audio
+        st.success("✅ Speech generated successfully!")
+        st.audio(output_file, format='audio/wav')
+        full_path = os.path.abspath(output_file)
+        st.caption(f"📍 File saved at: `{full_path}`")
