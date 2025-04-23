@@ -3,110 +3,82 @@ import os
 import tempfile
 from ibm_watson import TextToSpeechV1, AssistantV1
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
-from textblob import TextBlob  # Sentiment Analysis using TextBlob
+from textblob import TextBlob
 
-# === Set up credentials ===
 tts_api_key = 'jgrAfEhKei2MLssxHGyPwW4uroLBf1LV9ckX6leiU9b1'
 tts_url = 'https://api.us-south.text-to-speech.watson.cloud.ibm.com/instances/3d2f4748-4b26-4d25-9a17-690ebd52a8ce'
 
 assistant_api_key = 'VJgrplKKAv5h-MUHM9O8P8LwUtCoVBfbGd7HGoaKMLo3'
 assistant_url = 'https://api.us-south.assistant.watson.cloud.ibm.com'
-workspace_id = '3fff36d2-a858-4822-b5ad-c31e280266f1'  # <-- Use your Dialog Skill ID here
+workspace_id = '3fff36d2-a858-4822-b5ad-c31e280266f1'
 
-# === Setup TTS ===
 tts_auth = IAMAuthenticator(tts_api_key)
 tts = TextToSpeechV1(authenticator=tts_auth)
 tts.set_service_url(tts_url)
 
-# === Setup Assistant V1 ===
 assistant_auth = IAMAuthenticator(assistant_api_key)
 assistant = AssistantV1(version='2021-06-14', authenticator=assistant_auth)
 assistant.set_service_url(assistant_url)
 
-# === Streamlit UI ===
 st.set_page_config(page_title="AskNova AI Chat", page_icon="🤖")
 st.title("🧠 AskNova - AI Chat Assistant")
 st.write("Type your message below. AskNova will reply and read it aloud!")
 
-# Input section for user message
 user_input = st.text_input("You:", key="user_input")
 
-# Dropdown to ask user for preferred voice and tone
 tone_option = st.selectbox(
     "Select the tone/voice you want for the response:",
     ["Cheerful", "Excited", "Calm", "Sarcastic", "Neutral", "Empathetic"]
 )
 
-# Button to send message
 if st.button("Send"):
     if not user_input.strip():
         st.warning("Please enter a message.")
     else:
         try:
-            # === Sentiment Analysis using TextBlob ===
             sentiment = TextBlob(user_input).sentiment.polarity
 
-            # Determine sentiment and map to tone and emoji
-            if sentiment > 0:
-                if tone_option == "Cheerful":
-                    emoji = "😊"  # Cheerful emoji for positive sentiment
-                    response_tone = "positive"
-                    voice = "en-US_AllisonV3Voice"  # Cheerful voice
-                elif tone_option == "Excited":
-                    emoji = "😃"  # Excited emoji for positive sentiment
-                    response_tone = "positive"
-                    voice = "en-US_IvyV3Voice"  # Excited voice
-                else:
-                    emoji = "😐"  # Neutral emoji for positive sentiment
-                    response_tone = "positive"
-                    voice = "en-US_LisaV3Voice"  # Neutral voice for positive sentiment
-            elif sentiment < 0:
-                if tone_option == "Sarcastic":
-                    emoji = "🙄"  # Sarcastic emoji for negative sentiment
-                    response_tone = "negative"
-                    voice = "en-US_MichaelV3Voice"  # Sarcastic tone voice
-                elif tone_option == "Empathetic":
-                    emoji = "😔"  # Empathetic emoji for negative sentiment
-                    response_tone = "negative"
-                    voice = "en-US_JamesV3Voice"  # Empathetic voice
-                else:
-                    emoji = "😞"  # Negative emoji for negative sentiment
-                    response_tone = "negative"
-                    voice = "en-US_MichaelV3Voice"  # Calming voice for negative sentiment
+            if tone_option == "Cheerful":
+                emoji = "😊"
+                voice = "en-US_AllisonV3Voice"
+            elif tone_option == "Excited":
+                emoji = "😃"
+                voice = "en-US_IvyV3Voice"
+            elif tone_option == "Calm":
+                emoji = "😌"
+                voice = "en-US_KevinV3Voice"
+            elif tone_option == "Sarcastic":
+                emoji = "🙄"
+                voice = "en-US_MichaelV3Voice"
+            elif tone_option == "Empathetic":
+                emoji = "😔"
+                voice = "en-US_JamesV3Voice"
             else:
-                emoji = "😐"  # Neutral emoji for neutral sentiment
-                response_tone = "neutral"
-                voice = "en-US_LisaV3Voice"  # Neutral voice for neutral sentiment
+                emoji = "😐"
+                voice = "en-US_LisaV3Voice"
 
-            # === Get response from Watson Assistant V1 ===
             response = assistant.message(
                 workspace_id=workspace_id,
                 input={'text': user_input}
             ).get_result()
 
-            # Extract the bot's response
             bot_message = response['output']['text'][0]
+            st.markdown(f"*AskNova:* {bot_message} {emoji}")
 
-            # Display the response with sentiment emoji
-            st.markdown(f"**AskNova:** {bot_message} {emoji}")
-
-            # === Adjust Assistant's Response Based on Sentiment ===
-            if response_tone == "positive":
-                bot_message = f"That's great! {bot_message}"  # Add a cheerful tone to the response
-            elif response_tone == "negative":
-                bot_message = f"I'm really sorry to hear that. {bot_message}"  # Empathetic tone for negative sentiment
+            if sentiment > 0:
+                bot_message = f"That's great! {bot_message}"
+            elif sentiment < 0:
+                bot_message = f"I'm really sorry to hear that. {bot_message}"
             else:
-                bot_message = f"Okay, let's get to it. {bot_message}"  # Neutral tone for neutral sentiment
+                bot_message = f"Okay, let's get to it. {bot_message}"
 
-            # === Convert response to speech ===
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
                 audio_response = tts.synthesize(
                     bot_message,
-                    voice=voice,  # Use the selected voice
+                    voice=voice,
                     accept='audio/wav'
                 ).get_result()
 
-                # Check if the audio response is valid and write it to a temporary file
                 if audio_response.content:
                     tmpfile.write(audio_response.content)
                     st.audio(tmpfile.name, format='audio/wav')
