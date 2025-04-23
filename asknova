@@ -38,52 +38,51 @@ if st.button("Send"):
         try:
             sentiment = TextBlob(user_input).sentiment.polarity
 
-            if tone_option == "Cheerful":
-                emoji = "😊"
-                voice = "en-US_AllisonV3Voice"
-            elif tone_option == "Excited":
-                emoji = "😃"
-                voice = "en-US_IvyV3Voice"
-            elif tone_option == "Calm":
-                emoji = "😌"
-                voice = "en-US_KevinV3Voice"
-            elif tone_option == "Sarcastic":
-                emoji = "🙄"
-                voice = "en-US_MichaelV3Voice"
-            elif tone_option == "Empathetic":
-                emoji = "😔"
-                voice = "en-US_JamesV3Voice"
-            else:
-                emoji = "😐"
-                voice = "en-US_LisaV3Voice"
+            tone_voice_map = {
+                "Cheerful": ("😊", "en-US_AllisonV3Voice"),
+                "Excited": ("😃", "en-US_IvyV3Voice"),
+                "Calm": ("😌", "en-US_KevinV3Voice"),
+                "Sarcastic": ("🙄", "en-US_MichaelV3Voice"),
+                "Empathetic": ("😔", "en-US_JamesV3Voice"),
+                "Neutral": ("😐", "en-US_LisaV3Voice"),
+            }
+
+            emoji, voice = tone_voice_map[tone_option]
 
             response = assistant.message(
                 workspace_id=workspace_id,
                 input={'text': user_input}
             ).get_result()
 
-            bot_message = response['output']['text'][0]
-            st.markdown(f"*AskNova:* {bot_message} {emoji}")
-
-            if sentiment > 0:
-                bot_message = f"That's great! {bot_message}"
-            elif sentiment < 0:
-                bot_message = f"I'm really sorry to hear that. {bot_message}"
+            output_texts = response.get('output', {}).get('text', [])
+            if not output_texts:
+                st.error("Assistant did not return a response.")
             else:
-                bot_message = f"Okay, let's get to it. {bot_message}"
+                bot_message = output_texts[0]
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-                audio_response = tts.synthesize(
-                    bot_message,
-                    voice=voice,
-                    accept='audio/wav'
-                ).get_result()
+                st.markdown(f"**AskNova {emoji}:** {bot_message}")
 
-                if audio_response.content:
-                    tmpfile.write(audio_response.content)
-                    st.audio(tmpfile.name, format='audio/wav')
+                if sentiment > 0:
+                    bot_message = f"That's great! {bot_message}"
+                elif sentiment < 0:
+                    bot_message = f"I'm really sorry to hear that. {bot_message}"
                 else:
-                    st.error("Failed to generate audio response.")
+                    bot_message = f"Okay, let's get to it. {bot_message}"
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
+                    audio_response = tts.synthesize(
+                        bot_message,
+                        voice=voice,
+                        accept='audio/wav'
+                    ).get_result()
+
+                    audio_content = audio_response.content if hasattr(audio_response, 'content') else None
+
+                    if audio_content:
+                        tmpfile.write(audio_content)
+                        st.audio(tmpfile.name, format='audio/wav')
+                    else:
+                        st.error("Failed to generate audio response from TTS.")
 
         except Exception as e:
-            st.error(f"An error occurred: {e}")
+            st.exception(f"An unexpected error occurred:\n\n{e}")
