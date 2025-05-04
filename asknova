@@ -1,88 +1,65 @@
 import streamlit as st
-import os
 import tempfile
-from ibm_watson import TextToSpeechV1, AssistantV1
-from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+from gtts import gTTS
 from textblob import TextBlob
 
-tts_api_key = 'jgrAfEhKei2MLssxHGyPwW4uroLBf1LV9ckX6leiU9b1'
-tts_url = 'https://api.us-south.text-to-speech.watson.cloud.ibm.com/instances/3d2f4748-4b26-4d25-9a17-690ebd52a8ce'
-
-assistant_api_key = 'VJgrplKKAv5h-MUHM9O8P8LwUtCoVBfbGd7HGoaKMLo3'
-assistant_url = 'https://api.us-south.assistant.watson.cloud.ibm.com'
-workspace_id = '3fff36d2-a858-4822-b5ad-c31e280266f1'
-
-tts_auth = IAMAuthenticator(tts_api_key)
-tts = TextToSpeechV1(authenticator=tts_auth)
-tts.set_service_url(tts_url)
-
-assistant_auth = IAMAuthenticator(assistant_api_key)
-assistant = AssistantV1(version='2021-06-14', authenticator=assistant_auth)
-assistant.set_service_url(assistant_url)
-
 st.set_page_config(page_title="AskNova AI Chat", page_icon="🤖")
-st.title("🧠 AskNova - AI Chat Assistant")
+st.title("🧠 AskNova - AI Chat Assistant (Free API Version)")
 st.write("Type your message below. AskNova will reply and read it aloud!")
 
 user_input = st.text_input("You:", key="user_input")
 
 tone_option = st.selectbox(
-    "Select the tone/voice you want for the response:",
+    "Select the tone/emoji for the response:",
     ["Cheerful", "Excited", "Calm", "Sarcastic", "Neutral", "Empathetic"]
 )
+
+# 🔁 Rule-based local chatbot logic (replaceable with AI API)
+def local_bot_logic(text):
+    text = text.lower()
+    if "hello" in text or "hi" in text:
+        return "Hello! How can I assist you today?"
+    elif "how are you" in text:
+        return "I'm just a bot, but I'm functioning at full capacity!"
+    elif "your name" in text:
+        return "I'm AskNova, your friendly AI assistant!"
+    elif "bye" in text or "goodbye" in text:
+        return "Goodbye! Talk to you soon."
+    else:
+        return "Hmm, I didn't get that. Can you please rephrase?"
+
+# 👇 Optional tone emojis
+tone_emoji = {
+    "Cheerful": "😊",
+    "Excited": "😃",
+    "Calm": "😌",
+    "Sarcastic": "🙄",
+    "Empathetic": "😔",
+    "Neutral": "😐"
+}
 
 if st.button("Send"):
     if not user_input.strip():
         st.warning("Please enter a message.")
     else:
-        try:
-            sentiment = TextBlob(user_input).sentiment.polarity
+        sentiment = TextBlob(user_input).sentiment.polarity
+        emoji = tone_emoji[tone_option]
 
-            tone_voice_map = {
-                "Cheerful": ("😊", "en-US_AllisonV3Voice"),
-                "Excited": ("😃", "en-US_IvyV3Voice"),
-                "Calm": ("😌", "en-US_KevinV3Voice"),
-                "Sarcastic": ("🙄", "en-US_MichaelV3Voice"),
-                "Empathetic": ("😔", "en-US_JamesV3Voice"),
-                "Neutral": ("😐", "en-US_LisaV3Voice"),
-            }
+        # Get bot's response
+        bot_message = local_bot_logic(user_input)
 
-            emoji, voice = tone_voice_map[tone_option]
+        # Add sentiment-based prefix
+        if sentiment > 0:
+            bot_message = f"That's great! {bot_message}"
+        elif sentiment < 0:
+            bot_message = f"I'm really sorry to hear that. {bot_message}"
+        else:
+            bot_message = f"Okay, here's what I think: {bot_message}"
 
-            response = assistant.message(
-                workspace_id=workspace_id,
-                input={'text': user_input}
-            ).get_result()
+        st.markdown(f"**AskNova {emoji}:** {bot_message}")
 
-            output_texts = response.get('output', {}).get('text', [])
-            if not output_texts:
-                st.error("Assistant did not return a response.")
-            else:
-                bot_message = output_texts[0]
-
-                st.markdown(f"**AskNova {emoji}:** {bot_message}")
-
-                if sentiment > 0:
-                    bot_message = f"That's great! {bot_message}"
-                elif sentiment < 0:
-                    bot_message = f"I'm really sorry to hear that. {bot_message}"
-                else:
-                    bot_message = f"Okay, let's get to it. {bot_message}"
-
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-                    audio_response = tts.synthesize(
-                        bot_message,
-                        voice=voice,
-                        accept='audio/wav'
-                    ).get_result()
-
-                    audio_content = audio_response.content if hasattr(audio_response, 'content') else None
-
-                    if audio_content:
-                        tmpfile.write(audio_content)
-                        st.audio(tmpfile.name, format='audio/wav')
-                    else:
-                        st.error("Failed to generate audio response from TTS.")
-
-        except Exception as e:
-            st.exception(f"An unexpected error occurred:\n\n{e}")
+        # Convert bot response to audio using gTTS
+        tts = gTTS(bot_message)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
+            tts.save(tmpfile.name)
+            st.audio(tmpfile.name, format='audio/mp3')
